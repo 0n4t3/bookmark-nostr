@@ -34,7 +34,7 @@ export function Layout({ children }: LayoutProps) {
   return (
     <div className="min-h-screen bg-background">
       {/* HN-Style Top Bar */}
-      <header className="hn-topbar">
+      <header className="topbar">
         <div className="max-w-5xl mx-auto px-2 py-1">
           <div className="flex items-center gap-1 text-sm leading-tight relative">
             {/* Logo */}
