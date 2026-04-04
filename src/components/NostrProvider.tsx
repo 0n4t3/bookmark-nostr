@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { NostrEvent, NPool, NRelay1 } from '@nostrify/nostrify';
 import { NostrContext } from '@nostrify/react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -18,15 +18,15 @@ const NostrProvider: React.FC<NostrProviderProps> = (props) => {
   const pool = useRef<NPool | undefined>(undefined);
 
   // Use refs so the pool always has the latest data
-  const relayUrl = useRef<string>(config.relayUrl);
+  const relayUrls = useRef<string[]>(config.relayUrls);
   const available = useRef(availableRelays);
 
-  // Update refs when config changes
+  // Update refs when config changes and reset queries
   useEffect(() => {
-    relayUrl.current = config.relayUrl;
+    relayUrls.current = config.relayUrls;
     available.current = availableRelays;
     queryClient.resetQueries();
-  }, [config.relayUrl, availableRelays, queryClient]);
+  }, [config.relayUrls, availableRelays, queryClient]);
 
   // Initialize NPool only once
   if (!pool.current) {
@@ -35,7 +35,9 @@ const NostrProvider: React.FC<NostrProviderProps> = (props) => {
         return new NRelay1(url);
       },
       reqRouter(filters) {
-        return new Map([[relayUrl.current, filters]]);
+        // Route queries to all active relays simultaneously
+        const relays = relayUrls.current.length > 0 ? relayUrls.current : available.current.map(r => r.url);
+        return new Map(relays.map(url => [url, filters]));
       },
       eventRouter(_event: NostrEvent) {
         return available.current.map((info) => info.url);
