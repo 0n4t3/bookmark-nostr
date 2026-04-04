@@ -68,6 +68,15 @@ export function Layout({ children }: LayoutProps) {
               >
                 home
               </Link>
+              <Link
+                to="/tags"
+                className={cn(
+                  'text-white hover:underline',
+                  location.pathname === '/tags' ? 'font-bold underline' : 'text-white/60'
+                )}
+              >
+                tags
+              </Link>
               {user && (
                 <>
                   <Link

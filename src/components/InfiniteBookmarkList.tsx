@@ -211,9 +211,10 @@ interface InfiniteBookmarkListProps {
   showUserFilter?: boolean;
   initialSearchTerm?: string;
   title?: string;
+  initialTag?: string;
 }
 
-export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSearchTerm = '', title }: InfiniteBookmarkListProps) {
+export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSearchTerm = '', title, initialTag }: InfiniteBookmarkListProps) {
   const { user } = useCurrentUser();
   const { nostr } = useNostr();
   const [searchInput, setSearchInput] = useState(initialSearchTerm);
@@ -221,7 +222,7 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
   const [showFollowsOnly, setShowFollowsOnly] = useState(false);
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
   const [sortMode, setSortMode] = useState<SortMode>('new');
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [selectedTag, setSelectedTag] = useState<string | null>(initialTag || null);
 
   // Engagement scores
   const [engagementScores, setEngagementScores] = useState<Map<string, EngagementScore>>(new Map());
@@ -317,12 +318,18 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
     };
   }, [sortMode, nostr, timeWindowSeconds, allBookmarks]);
 
+  // Normalize the selected tag for comparison
+  const normalizedSelectedTag = selectedTag?.trim().toLowerCase() || null;
+
   // Build the display list
   let displayBookmarks: Array<Bookmark & { _score?: number }> = allBookmarks;
 
-  // Apply tag filter
-  if (selectedTag) {
-    displayBookmarks = displayBookmarks.filter(b => b.tags.includes(selectedTag));
+  // Apply tag filter — normalize both sides for comparison
+  if (normalizedSelectedTag) {
+    displayBookmarks = displayBookmarks.filter(b => {
+      const tags = b.tags || [];
+      return tags.some(t => t.trim().toLowerCase() === normalizedSelectedTag);
+    });
   }
 
   // Apply time window for hot/top
@@ -392,34 +399,40 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
 
   return (
     <div>
-      {/* Sort tabs - HN style: new | hot | top */}
-      {!pubkey && !isSearching && (
-        <div className="flex items-center gap-3 mb-3 text-xs">
-          <span className="text-muted-foreground/60">view:</span>
-          {[
-            { mode: 'new' as SortMode, label: 'new', icon: ArrowUp },
-            { mode: 'hot' as SortMode, label: 'hot', icon: TrendingUp },
-            { mode: 'top' as SortMode, label: 'top', icon: Star },
-          ].map(({ mode, label, icon: Icon }) => (
-            <button
-              key={mode}
-              onClick={() => setSortMode(mode)}
-              className={cn(
-                "flex items-center gap-1 pb-1 border-b-2 transition-colors uppercase",
-                sortMode === mode
-                  ? "border-primary text-foreground font-medium"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Icon className="h-3 w-3" />
-              {label}
-            </button>
-          ))}
-          {(sortMode === 'hot' || sortMode === 'top') && scoresLoading && (
-            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-          )}
-        </div>
-      )}
+       {/* Sort tabs - HN style: new | hot | top | tags */}
+       {!pubkey && !isSearching && (
+         <div className="flex items-center gap-3 mb-3 text-xs">
+           <span className="text-muted-foreground/60">view:</span>
+           {[
+             { mode: 'new' as SortMode, label: 'new', icon: ArrowUp },
+             { mode: 'hot' as SortMode, label: 'hot', icon: TrendingUp },
+             { mode: 'top' as SortMode, label: 'top', icon: Star },
+           ].map(({ mode, label, icon: Icon }) => (
+             <button
+               key={mode}
+               onClick={() => setSortMode(mode)}
+               className={cn(
+                 "flex items-center gap-1 pb-1 border-b-2 transition-colors uppercase",
+                 sortMode === mode
+                   ? "border-primary text-foreground font-medium"
+                   : "border-transparent text-muted-foreground hover:text-foreground"
+               )}
+             >
+               <Icon className="h-3 w-3" />
+               {label}
+             </button>
+           ))}
+           <Link
+             to="/tags"
+             className="flex items-center gap-1 pb-1 border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-colors uppercase"
+           >
+             tags
+           </Link>
+           {(sortMode === 'hot' || sortMode === 'top') && scoresLoading && (
+             <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+           )}
+         </div>
+       )}
 
       {/* Follows filter */}
       {!pubkey && user && follows.length > 0 && (
