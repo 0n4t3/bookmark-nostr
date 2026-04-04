@@ -85,6 +85,8 @@
 
 /* Top bar */
 .topbar {
+  width: 100%;
+  min-width: 100vw;
   background: linear-gradient(to bottom, #15803d 0%, #166534 100%);
 }
 

@@ -527,7 +527,7 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
                     </div>
 
                     {/* Metadata row */}
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1.5 overflow-hidden">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1.5 mt-1 text-xs text-muted-foreground">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <Link to={`/profile/${nip19.npubEncode(bookmark.pubkey)}`} className="text-primary hover:underline">
                           <AuthorName pubkey={bookmark.pubkey} />
