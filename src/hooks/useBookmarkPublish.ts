@@ -19,7 +19,7 @@ export function useBookmarkPublish() {
       
       // Remove query string and hash unless explicitly needed
       const urlObj = new URL(data.url);
-      dTag = urlObj.hostname + urlObj.pathname;
+      dTag = urlObj.hostname + urlObj.pathname + urlObj.search + urlObj.hash;
       
       // Remove trailing slash
       dTag = dTag.replace(/\/$/, '');

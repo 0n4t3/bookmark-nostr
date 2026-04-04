@@ -54,7 +54,7 @@ export function Layout({ children }: LayoutProps) {
             {/* Logo */}
             <Link to="/" className="flex items-center gap-1 font-bold text-white hover:underline shrink-0">
               <Bookmark className="h-4 w-4" />
-              <span>vibemarks</span> 🐧
+              <span>vibemarks</span> 🔖
             </Link>
 
             {/* Desktop Nav Links */}
