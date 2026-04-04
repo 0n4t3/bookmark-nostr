@@ -1,6 +1,6 @@
 {
-  "name": "MKPinja",
-  "short_name": "MKPinja",
+  "name": "Vibemarks",
+  "short_name": "Vibemarks",
   "description": "Decentralized bookmarking on Nostr",
   "start_url": "/",
   "display": "standalone",

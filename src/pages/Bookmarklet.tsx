@@ -29,7 +29,7 @@ const Bookmarklet = () => {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-sm text-sm hover:bg-primary/90"
               onClick={(e) => e.preventDefault()}
             >
-              <span>📌 MKPinja</span>
+              <span>📌 Vibemarks</span>
             </a>
           </div>
 
@@ -38,7 +38,7 @@ const Bookmarklet = () => {
             <ol className="list-decimal list-inside space-y-1 text-xs">
               <li>Drag the button above to your browser's bookmarks bar</li>
               <li>Navigate to any page you want to bookmark</li>
-              <li>Click the 📌 MKPinja bookmark</li>
+              <li>Click the 📌 Vibemarks bookmark</li>
               <li>The bookmark form opens with the URL pre-filled</li>
             </ol>
           </div>

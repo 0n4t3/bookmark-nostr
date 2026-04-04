@@ -54,7 +54,7 @@ export function Layout({ children }: LayoutProps) {
             {/* Logo */}
             <Link to="/" className="flex items-center gap-1 font-bold text-white hover:underline shrink-0">
               <Bookmark className="h-4 w-4" />
-              <span>mkpinja</span> 🐧
+              <span>vibemarks</span> 🐧
             </Link>
 
             {/* Desktop Nav Links */}
@@ -313,7 +313,7 @@ export function Layout({ children }: LayoutProps) {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
             <div className="flex items-center gap-1">
               <Bookmark className="h-3 w-3" />
-              <span>MKPinja — Decentralized bookmarking on Nostr</span>
+              <span>Vibemarks — Decentralized bookmarking on Nostr</span>
             </div>
             <div className="flex items-center gap-3">
               {/* Relay selector in footer */}
@@ -328,7 +328,7 @@ export function Layout({ children }: LayoutProps) {
               </a>
               <span className="text-muted-foreground/40">·</span>
               <a
-                href="https://github.com/sepehr-safari/mkpinja"
+                 href="https://github.com/sepehr-safari/vibemarks"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-primary"
