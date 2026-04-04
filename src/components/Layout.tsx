@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LoginArea } from '@/components/auth/LoginArea';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { RelaySelector } from '@/components/RelaySelector';
-import { Bookmark, Search, Code, ChevronDown, Settings } from 'lucide-react';
+import { Bookmark, Search, ChevronDown } from 'lucide-react';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useLoggedInAccounts } from '@/hooks/useLoggedInAccounts';
 import { cn } from '@/lib/utils';
@@ -25,6 +25,7 @@ export function Layout({ children }: LayoutProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
 
+  // Close menus on outside click
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
@@ -128,11 +129,6 @@ export function Layout({ children }: LayoutProps) {
                   <Search className="h-4 w-4" />
                 </button>
               )}
-
-              {/* Bookmarklet */}
-              <Link to="/bookmarklet" className="p-1 text-white/60 hover:text-white" title="Bookmarklet">
-                <Code className="h-4 w-4" />
-              </Link>
 
               <ThemeToggle light />
 
@@ -287,13 +283,6 @@ export function Layout({ children }: LayoutProps) {
                   </Link>
                 </>
               )}
-              <Link
-                to="/bookmarklet"
-                onClick={() => setMobileMenuOpen(false)}
-                className="text-white/60 hover:underline py-1 px-1"
-              >
-                bookmarklet
-              </Link>
               {!user && (
                 <div className="py-1 px-1">
                   <LoginArea className="w-full" />
