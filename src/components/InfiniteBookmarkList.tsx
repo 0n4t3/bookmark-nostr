@@ -398,7 +398,7 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
   const hasBookmarkDescription = (bookmark: Bookmark) => bookmark.description && bookmark.description.trim().length > 0;
 
   return (
-    <div>
+    <div className="max-w-full min-w-0">
        {/* Sort tabs - HN style: new | hot | top | tags */}
        {!pubkey && !isSearching && (
          <div className="flex items-center gap-3 mb-3 text-xs">
@@ -493,7 +493,7 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
           <div className="space-y-0">
             {scoredBookmarks.map((bookmark, index) => (
               <div key={bookmark.id} className="border-b border-border/30 hover:bg-muted/30 transition-colors group">
-                <div className="flex items-start gap-2 py-3 px-1">
+                <div className="flex items-start gap-2 py-3 px-1 min-w-0">
                   {/* Number */}
                   <span className="text-muted-foreground text-xs min-w-[20px] tabular-nums pt-1 text-right">
                     {index + 1}.
@@ -512,7 +512,7 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
                         href={bookmark.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-sm font-medium text-foreground hover:text-primary hover:underline leading-snug break-words"
+                        className="text-sm font-medium text-foreground hover:text-primary hover:underline leading-snug break-words overflow-wrap-anywhere max-w-full"
                       >
                         {bookmark.title || new URL(bookmark.url).hostname}
                       </a>
@@ -527,11 +527,12 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
                     </div>
 
                     {/* Metadata row */}
-                    <div className="flex items-center gap-1.5 flex-wrap mt-1 text-[11px] text-muted-foreground">
-                      <Link to={`/profile/${nip19.npubEncode(bookmark.pubkey)}`} className="text-primary hover:underline">
-                        <AuthorName pubkey={bookmark.pubkey} />
-                      </Link>
-                      <span>{formatDistanceToNow(new Date(bookmark.createdAt * 1000), { addSuffix: true })}</span>
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1.5 overflow-hidden">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <Link to={`/profile/${nip19.npubEncode(bookmark.pubkey)}`} className="text-primary hover:underline">
+                          <AuthorName pubkey={bookmark.pubkey} />
+                        </Link>
+                        <span>{formatDistanceToNow(new Date(bookmark.createdAt * 1000), { addSuffix: true })}</span>
 
                       {/* Show score for hot/top modes */}
                       {(sortMode === 'hot' || sortMode === 'top') && bookmark._score > 0 && (
@@ -593,7 +594,8 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
                       >
                         <MessageSquare className="h-2.5 w-2.5" />
                         discuss
-                      </button>
+                       </button>
+                      </div>
                     </div>
 
                     {hasBookmarkDescription(bookmark) && (
@@ -634,7 +636,7 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
 
                 {/* Comments section */}
                 {expandedComments.has(bookmark.id) && (
-                  <div className="px-1 pb-3 pl-[78px]">
+                  <div className="px-1 pb-3 pl-10 sm:pl-[78px]">
                     <CommentsSection event={bookmark.event} className="mt-2" />
                   </div>
                 )}

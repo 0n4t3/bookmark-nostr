@@ -100,4 +100,25 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  html {
+    width: 100%;
+    min-height: 100%;
+  }
+
+  body {
+    min-height: 100dvh;
+  }
+}
+
+/* Prevent any element from forcing a page wider than the viewport */
+img, video, svg, canvas, iframe {
+  max-width: 100%;
+}
+
+/* HN-style bookmark items: constrain description on mobile */
+@media (max-width: 640px) {
+  .max-w-\[600px\] {
+    max-width: 100% !important;
+  }
 }
