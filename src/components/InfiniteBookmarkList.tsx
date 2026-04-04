@@ -493,7 +493,7 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
           <div className="space-y-0">
             {scoredBookmarks.map((bookmark, index) => (
               <div key={bookmark.id} className="border-b border-border/30 hover:bg-muted/30 transition-colors group">
-                <div className="flex items-start gap-2 py-3 px-1 min-w-0">
+                <div className="flex items-start gap-2 py-3 px-1 min-w-0 overflow-hidden">
                   {/* Number */}
                   <span className="text-muted-foreground text-xs min-w-[20px] tabular-nums pt-1 text-right">
                     {index + 1}.
@@ -527,18 +527,15 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
                     </div>
 
                     {/* Metadata row */}
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1.5 mt-1 text-xs text-muted-foreground">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <Link to={`/profile/${nip19.npubEncode(bookmark.pubkey)}`} className="text-primary hover:underline">
-                          <AuthorName pubkey={bookmark.pubkey} />
-                        </Link>
-                        <span>{formatDistanceToNow(new Date(bookmark.createdAt * 1000), { addSuffix: true })}</span>
+                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-1 text-[11px] text-muted-foreground">
+                      <Link to={`/profile/${nip19.npubEncode(bookmark.pubkey)}`} className="text-primary hover:underline">
+                        <AuthorName pubkey={bookmark.pubkey} />
+                      </Link>
+                      <span>{formatDistanceToNow(new Date(bookmark.createdAt * 1000), { addSuffix: true })}</span>
 
                       {/* Show score for hot/top modes */}
                       {(sortMode === 'hot' || sortMode === 'top') && bookmark._score > 0 && (
-                        <>
-                          <span className="text-primary font-medium">{bookmark._score}</span>
-                        </>
+                        <span className="text-primary font-medium">{bookmark._score}</span>
                       )}
 
                       {hasBookmarkDescription(bookmark) && (
@@ -568,20 +565,18 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
                               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                             </button>
                           )}
-                          <div className="flex flex-wrap gap-x-1.5 gap-y-0.5">
-                            {bookmark.tags.map((tag) => (
-                              <button
-                                key={tag}
-                                onClick={() => setSelectedTag(tag === selectedTag ? null : tag)}
-                                className={cn(
-                                  "text-[11px] hover:text-primary transition-colors",
-                                  tag === selectedTag ? "text-primary font-medium" : "text-muted-foreground/80"
-                                )}
-                              >
-                                #{tag}
-                              </button>
-                            ))}
-                          </div>
+                          {bookmark.tags.map((tag) => (
+                            <button
+                              key={tag}
+                              onClick={() => setSelectedTag(tag === selectedTag ? null : tag)}
+                              className={cn(
+                                "text-[11px] hover:text-primary transition-colors",
+                                tag === selectedTag ? "text-primary font-medium" : "text-muted-foreground/80"
+                              )}
+                            >
+                              #{tag}
+                            </button>
+                          ))}
                         </>
                       )}
 
@@ -594,8 +589,7 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
                       >
                         <MessageSquare className="h-2.5 w-2.5" />
                         discuss
-                       </button>
-                      </div>
+                      </button>
                     </div>
 
                     {hasBookmarkDescription(bookmark) && (
