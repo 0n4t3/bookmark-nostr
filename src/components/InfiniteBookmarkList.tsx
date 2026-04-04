@@ -493,7 +493,7 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
           <div className="space-y-0">
             {scoredBookmarks.map((bookmark, index) => (
               <div key={bookmark.id} className="border-b border-border/30 hover:bg-muted/30 transition-colors group">
-                <div className="flex items-start gap-2 py-3 px-1 min-w-0 overflow-hidden">
+                <div className="flex items-start gap-2 py-3 px-1 min-w-0">
                   {/* Number */}
                   <span className="text-muted-foreground text-xs min-w-[20px] tabular-nums pt-1 text-right">
                     {index + 1}.
