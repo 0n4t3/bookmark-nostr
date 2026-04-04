@@ -4,14 +4,46 @@ import { useBookmarkSearch } from '@/hooks/useBookmarkSearch';
 import { useFollows } from '@/hooks/useFollows';
 import { useBookmarkDelete } from '@/hooks/useBookmarkPublish';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { useAuthor } from '@/hooks/useAuthor';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Trash2, Search, Users, Globe, Loader2, MessageSquare } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
-import { UserDisplay } from '@/components/UserDisplay';
 import { CommentsSection } from '@/components/CommentsSection';
+import { genUserName } from '@/lib/genUserName';
+import { cn } from '@/lib/utils';
+import type { NostrMetadata } from '@nostrify/nostrify';
+import { Link } from 'react-router-dom';
+import { nip19 } from 'nostr-tools';
+
+/** Small HN-style avatar for bookmark authors */
+function AuthorAvatar({ pubkey, className = '' }: { pubkey: string; className?: string }) {
+  const author = useAuthor(pubkey);
+  const metadata: NostrMetadata | undefined = author.data?.metadata;
+  const name = metadata?.name || genUserName(pubkey);
+  const initial = name.charAt(0).toUpperCase();
+
+  if (metadata?.picture) {
+    return (
+      <img
+        src={metadata.picture}
+        alt={name}
+        className={cn("rounded-full object-cover flex-shrink-0", className)}
+        loading="lazy"
+      />
+    );
+  }
+
+  return (
+    <div
+      className={cn("rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0", className)}
+    >
+      {initial}
+    </div>
+  );
+}
 
 interface InfiniteBookmarkListProps {
   pubkey?: string;
@@ -222,16 +254,29 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
           </div>
         )}
 
-        {/* Bookmark list - HN style */}
+        {/* Bookmark list - HN style with avatars */}
         {!isLoading && !error && filteredBookmarks.length > 0 && (
           <div className="space-y-0">
             {filteredBookmarks.map((bookmark, index) => (
               <div key={bookmark.id} className="border-b border-border/30 hover:bg-muted/30 transition-colors group">
-                {/* Main row - number + title + domain */}
                 <div className="flex items-start gap-2 py-3 px-1">
-                  <span className="text-muted-foreground text-xs min-w-[20px] tabular-nums pt-0.5 text-right">
+                  {/* Number */}
+                  <span className="text-muted-foreground text-xs min-w-[20px] tabular-nums pt-1 text-right">
                     {index + 1}.
                   </span>
+
+                  {/* Avatar */}
+                  <Link
+                    to={`/profile/${nip19.npubEncode(bookmark.pubkey)}`}
+                    className="mt-0.5 shrink-0"
+                  >
+                    <AuthorAvatar
+                      pubkey={bookmark.pubkey}
+                      className="w-5 h-5 bg-muted text-muted-foreground"
+                    />
+                  </Link>
+
+                  {/* Content */}
                   <div className="flex-1 min-w-0">
                     {/* Title link */}
                     <div className="flex items-start gap-1.5 flex-wrap">
@@ -255,13 +300,12 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
 
                     {/* Metadata row */}
                     <div className="flex items-center gap-1.5 flex-wrap mt-1 text-[11px] text-muted-foreground">
-                      {showUserFilter && (
-                        <UserDisplay
-                          pubkey={bookmark.pubkey}
-                          avatarSize="sm"
-                          className="text-[11px] text-muted-foreground"
-                        />
-                      )}
+                      <Link
+                        to={`/profile/${nip19.npubEncode(bookmark.pubkey)}`}
+                        className="text-primary hover:underline"
+                      >
+                        {genUserName(bookmark.pubkey)}
+                      </Link>
                       <span>{formatDistanceToNow(new Date(bookmark.createdAt * 1000), { addSuffix: true })}</span>
                       {bookmark.tags.length > 0 && (
                         <>
@@ -345,7 +389,7 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
 
                 {/* Comments section */}
                 {expandedComments.has(bookmark.id) && (
-                  <div className="px-1 pb-3 pl-[42px]">
+                  <div className="px-1 pb-3 pl-[78px]">
                     <CommentsSection
                       event={bookmark.event}
                       className="mt-2"

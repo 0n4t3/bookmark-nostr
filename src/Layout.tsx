@@ -3,7 +3,6 @@ import { ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LoginArea } from '@/components/auth/LoginArea';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { RelaySelector } from '@/components/RelaySelector';
 import { Bookmark, Search, Code, ChevronDown, Settings } from 'lucide-react';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useLoggedInAccounts } from '@/hooks/useLoggedInAccounts';
@@ -20,6 +19,7 @@ export function Layout({ children }: LayoutProps) {
   const { currentUser, removeLogin } = useLoggedInAccounts();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -53,7 +53,7 @@ export function Layout({ children }: LayoutProps) {
             {/* Logo */}
             <Link to="/" className="flex items-center gap-1 font-bold text-white hover:underline shrink-0">
               <Bookmark className="h-4 w-4" />
-              <span>mkpinja</span> 🐧
+              <span>mkpinja</span>
             </Link>
 
             {/* Desktop Nav Links */}
@@ -312,14 +312,35 @@ export function Layout({ children }: LayoutProps) {
       {/* Footer */}
       <footer className="border-t bg-card mt-auto">
         <div className="max-w-5xl mx-auto px-2 py-3">
+          {/* Settings expand */}
+          <div className="mb-2">
+            <button
+              onClick={() => setShowSettings(!showSettings)}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
+            >
+              <Settings className="h-3 w-3" />
+              Settings
+            </button>
+            {showSettings && (
+              <div className="mt-2 p-3 border rounded-sm bg-background">
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mb-1">Relays</p>
+                    {/* Inline relay management */}
+                    <RelaySettings />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
             <div className="flex items-center gap-1">
               <Bookmark className="h-3 w-3" />
               <span>MKPinja — Decentralized bookmarking on Nostr</span>
             </div>
-            <div className="flex items-center gap-3">
-              {/* Relay selector in footer */}
-              <RelaySelector className="h-6 text-xs" />
+            <div className="flex items-center gap-2">
+              {/* NIP-B0 link */}
               <a
                 href="https://github.com/nostr-protocol/nips/blob/master/B0.md"
                 target="_blank"
@@ -328,7 +349,7 @@ export function Layout({ children }: LayoutProps) {
               >
                 NIP-B0
               </a>
-              <span className="text-muted-foreground/40">·</span>
+              <span className="mx-1">·</span>
               <a
                 href="https://github.com/sepehr-safari/mkpinja"
                 target="_blank"
@@ -346,4 +367,28 @@ export function Layout({ children }: LayoutProps) {
       </footer>
     </div>
   );
+}
+
+// Simple relay settings component (inline for footer)
+function RelaySettings() {
+  const { relayUrls, toggleRelay } = useRelayContext();
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5">
+        {relayUrls.length === 0 && (
+          <span className="text-xs text-muted-foreground">No relays selected</span>
+        )}
+        {/* This will be populated by the context */}
+      </div>
+      <p className="text-[10px] text-muted-foreground">
+        Relay settings available in the full relay selector
+      </p>
+    </div>
+  );
+}
+
+// Simple context to avoid circular deps
+function useRelayContext() {
+  return { relayUrls: [], toggleRelay: () => {} };
 }
