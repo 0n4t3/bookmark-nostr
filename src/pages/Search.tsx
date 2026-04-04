@@ -2,9 +2,6 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { InfiniteBookmarkList } from '@/components/InfiniteBookmarkList';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import { Search as SearchIcon } from 'lucide-react';
 
 const Search = () => {
@@ -12,7 +9,6 @@ const Search = () => {
   const [searchInput, setSearchInput] = useState(searchParams.get('q') || '');
   const [currentQuery, setCurrentQuery] = useState(searchParams.get('q') || '');
 
-  // Update search input when URL changes
   useEffect(() => {
     const query = searchParams.get('q') || '';
     setSearchInput(query);
@@ -21,86 +17,68 @@ const Search = () => {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmedQuery = searchInput.trim();
-    
-    if (trimmedQuery) {
-      setSearchParams({ q: trimmedQuery });
-      setCurrentQuery(trimmedQuery);
+    const trimmed = searchInput.trim();
+    if (trimmed) {
+      setSearchParams({ q: trimmed });
+      setCurrentQuery(trimmed);
     } else {
       setSearchParams({});
       setCurrentQuery('');
     }
   };
 
-  const handleClear = () => {
-    setSearchInput('');
-    setSearchParams({});
-    setCurrentQuery('');
-  };
-
   return (
     <Layout>
-      <div className="space-y-6">
-        {/* Search Header */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <SearchIcon className="h-5 w-5" />
-              Search Bookmarks
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSearch} className="flex gap-2">
-              <div className="flex-1">
-                <Input
-                  type="text"
-                  placeholder="Search bookmarks by title, description, URL, or tags..."
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  className="w-full"
-                />
-              </div>
-              <Button type="submit" disabled={!searchInput.trim()}>
-                Search
-              </Button>
-              {currentQuery && (
-                <Button type="button" variant="outline" onClick={handleClear}>
-                  Clear
-                </Button>
-              )}
-            </form>
-            
-            {currentQuery && (
-              <div className="mt-4 text-sm text-muted-foreground">
-                Searching for: <span className="font-medium">"{currentQuery}"</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      <div>
+        <div className="text-sm mb-4 text-muted-foreground">
+          <span className="font-medium">search bookm</span>arks
+          {currentQuery && <span className="ml-1">for "{currentQuery}"</span>}
+        </div>
 
-        {/* Search Results */}
-        {currentQuery ? (
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold">Search Results</h2>
-            {/* Pass the search term to trigger search mode */}
-            <InfiniteBookmarkList 
-              key={currentQuery} 
-              showUserFilter={true} 
-              initialSearchTerm={currentQuery}
+        <form onSubmit={handleSearch} className="flex gap-2 mb-4">
+          <div className="relative flex-1">
+            <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground h-3.5 w-3.5" />
+            <input
+              type="text"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search by title, description, URL, or tags..."
+              className="w-full h-7 text-sm px-3 pl-8 bg-card border border-border rounded-sm focus:outline-none focus:border-primary"
             />
           </div>
+          <button
+            type="submit"
+            disabled={!searchInput.trim()}
+            className="h-7 px-3 text-xs bg-primary text-primary-foreground rounded-sm hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            search
+          </button>
+          {currentQuery && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchInput('');
+                setSearchParams({});
+                setCurrentQuery('');
+              }}
+              className="h-7 px-3 text-xs border border-border rounded-sm hover:bg-muted"
+            >
+              clear
+            </button>
+          )}
+        </form>
+
+        {currentQuery ? (
+          <InfiniteBookmarkList
+            key={currentQuery}
+            showUserFilter={true}
+            initialSearchTerm={currentQuery}
+          />
         ) : (
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-center text-muted-foreground">
-                <SearchIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p className="text-lg mb-2">Search for bookmarks</p>
-                <p className="text-sm">
-                  Enter keywords to search through titles, descriptions, URLs, and tags.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="text-center py-16 text-muted-foreground text-xs">
+            <SearchIcon className="h-8 w-8 mx-auto mb-2 opacity-30" />
+            <p>Enter a search term to search bookmarks</p>
+          </div>
         )}
       </div>
     </Layout>
