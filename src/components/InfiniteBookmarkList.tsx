@@ -166,52 +166,28 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
 
   return (
     <div>
-      {/* Search bar and filters */}
-      <div className="flex items-center gap-2 mb-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground h-3.5 w-3.5" />
-          <Input
-            placeholder="Search bookmarks..."
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            className="pl-8 h-7 text-sm bg-card"
-          />
-        </div>
-        {user && follows.length > 0 && !pubkey && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowFilters(!showFilters)}
-            className="h-7 px-2 text-xs"
-          >
-            <Users className="h-3 w-3 mr-1" />
-            {showFollowsOnly ? 'Follows' : 'Global'}
-          </Button>
-        )}
-      </div>
-
-      {/* Filter info */}
-      {showFollowsOnly && follows.length > 0 && (
+      {/* Follows filter - only on public/home view */}
+      {!pubkey && user && follows.length > 0 && (
         <div className="text-xs text-muted-foreground mb-2 flex items-center gap-2">
           <Users className="h-3 w-3" />
-          {follows.length} connection{follows.length !== 1 ? 's' : ''}
-          <button
-            onClick={() => setShowFollowsOnly(false)}
-            className="text-primary hover:underline"
-          >
-            switch to global
-          </button>
-        </div>
-      )}
-      {!showFollowsOnly && !pubkey && user && follows.length > 0 && (
-        <div className="text-xs text-muted-foreground mb-2 flex items-center gap-2">
-          <Globe className="h-3 w-3" />
-          <button
-            onClick={() => setShowFollowsOnly(true)}
-            className="text-primary hover:underline"
-          >
-            show from connections only
-          </button>
+          {showFollowsOnly ? (
+            <>
+              {follows.length} connection{follows.length !== 1 ? 's' : ''}
+              <button
+                onClick={() => setShowFollowsOnly(false)}
+                className="text-primary hover:underline"
+              >
+                switch to global
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setShowFollowsOnly(true)}
+              className="text-primary hover:underline"
+            >
+              show from connections only
+            </button>
+          )}
         </div>
       )}
 
