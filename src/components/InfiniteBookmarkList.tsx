@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useInfiniteBookmarks, type Bookmark } from '@/hooks/useBookmarks';
 import { useBookmarkSearch } from '@/hooks/useBookmarkSearch';
 import { useFollows } from '@/hooks/useFollows';
@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 import { CommentsSection } from '@/components/CommentsSection';
 import { genUserName } from '@/lib/genUserName';
 import { cn } from '@/lib/utils';
-import type { NostrMetadata } from '@nostrify/nostrify';
+import type { NostrMetadata, NostrEvent } from '@nostrify/nostrify';
 import { Link } from 'react-router-dom';
 import { nip19 } from 'nostr-tools';
 
@@ -25,100 +25,101 @@ type SortMode = 'new' | 'hot' | 'top';
 interface EngagementScore {
   bookmarkId: string;
   score: number;
-  commentCount?: number;
-  reactionCount?: number;
+  reactionCount: number;
+  commentCount: number;
 }
 
-/** Compute engagement scores for a batch of bookmarks. */
-async function computeEngagementScores(
-  bookmarks: Bookmark[],
+interface BookmarkedWithScore extends Bookmark {
+  _score: number;
+  _reactionCount: number;
+  _commentCount: number;
+}
+
+/**
+ * Fetch engagement data for a batch of bookmarks.
+ * Queries reactions (kind 7) and comments (kind 1) using the event IDs.
+ * Returns a Map of bookmarkId -> { score, reactionCount, commentCount }.
+ */
+async function fetchEngagementScores(
   nostr: ReturnType<typeof useNostr>['nostr'],
+  bookmarkIds: string[],
   timeWindowSeconds?: number,
 ): Promise<Map<string, EngagementScore>> {
   const scores = new Map<string, EngagementScore>();
 
   // Initialize all bookmarks with zero scores
-  for (const b of bookmarks) {
-    scores.set(b.id, { bookmarkId: b.id, score: 0 });
+  for (const id of bookmarkIds) {
+    scores.set(id, { bookmarkId: id, score: 0, reactionCount: 0, commentCount: 0 });
   }
 
-  if (bookmarks.length === 0) return scores;
+  if (bookmarkIds.length === 0) return scores;
 
-  // Filter bookmarks by time window if specified
-  const cutoff = timeWindowSeconds
-    ? Math.floor(Date.now() / 1000) - timeWindowSeconds
-    : 0;
-  const relevantBookmarks = cutoff > 0
-    ? bookmarks.filter(b => b.createdAt >= cutoff)
-    : bookmarks;
-
-  if (relevantBookmarks.length === 0) return scores;
-
-  // Batch query reactions (kind 7) for all bookmarks
-  const bookmarkIds = relevantBookmarks.map(b => b.id);
+  const cutoff = timeWindowSeconds ? Math.floor(Date.now() / 1000) - timeWindowSeconds : 0;
   const since = cutoff > 0 ? cutoff : undefined;
 
-  try {
-    let reactions: Awaited<ReturnType<typeof nostr.query>> = [];
+  // Nostr relays have filter limits, so we chunk the IDs
+  const CHUNK_SIZE = 10;
+  const chunks: string[][] = [];
+  for (let i = 0; i < bookmarkIds.length; i += CHUNK_SIZE) {
+    chunks.push(bookmarkIds.slice(i, i + CHUNK_SIZE));
+  }
+
+  const allReactions: NostrEvent[] = [];
+  const allComments: NostrEvent[] = [];
+
+  // Fetch reactions and comments for each chunk
+  for (const chunk of chunks) {
     try {
-      const args: Parameters<typeof nostr.query>[] = since
-        ? [[{ kinds: [7], '#e': bookmarkIds, since }]]
-        : [[{ kinds: [7], '#e': bookmarkIds }]];
-      reactions = await nostr.query(...args);
+      const filters: Array<{ kinds: number[]; '#e': string[]; since?: number; limit: number }> = [
+        { kinds: [7], '#e': chunk, limit: 100 },
+        { kinds: [1], '#e': chunk, limit: 100 },
+      ];
+      if (since) {
+        filters[0].since = since;
+        filters[1].since = since;
+      }
+
+      const results = await nostr.query(filters, { signal: AbortSignal.timeout(8000) });
+      for (const ev of results) {
+        if (ev.kind === 7) allReactions.push(ev);
+        else if (ev.kind === 1) allComments.push(ev);
+      }
     } catch {
-      reactions = [];
+      // Chunk timed out or failed, continue with what we have
     }
+  }
 
-    const querySignal = AbortSignal.timeout(5000);
-
-    let comments: Awaited<ReturnType<typeof nostr.query>> = [];
-    try {
-      const args: Parameters<typeof nostr.query>[] = since
-        ? [[{ kinds: [1], '#e': bookmarkIds, since }]]
-        : [[{ kinds: [1], '#e': bookmarkIds }]];
-      comments = await nostr.query(...args, { signal: querySignal });
-    } catch {
-      comments = [];
-    }
-
-    // Count unique reactions per bookmark (deduplicate by pubkey)
-    const reactionMap = new Map<string, Set<string>>();
-    for (const r of reactions) {
-      const eTags = r.tags.filter(t => t[0] === 'e');
-      for (const eTag of eTags) {
-        if (eTag[1] && scores.has(eTag[1])) {
-          if (!reactionMap.has(eTag[1])) {
-            reactionMap.set(eTag[1], new Set());
-          }
-          reactionMap.get(eTag[1])!.add(r.pubkey);
-        }
+  // Count unique reactions per bookmark (deduplicate by pubkey)
+  const reactionCounts = new Map<string, Set<string>>();
+  for (const r of allReactions) {
+    const eTags = r.tags.filter(t => t[0] === 'e');
+    for (const eTag of eTags) {
+      if (eTag[1] && scores.has(eTag[1])) {
+        if (!reactionCounts.has(eTag[1])) reactionCounts.set(eTag[1], new Set());
+        reactionCounts.get(eTag[1])!.add(r.pubkey);
       }
     }
+  }
 
-    // Count unique comments per bookmark (deduplicate by pubkey)
-    const commentMap = new Map<string, Set<string>>();
-    for (const c of comments) {
-      const eTags = c.tags.filter(t => t[0] === 'e');
-      for (const eTag of eTags) {
-        if (eTag[1] && scores.has(eTag[1])) {
-          if (!commentMap.has(eTag[1])) {
-            commentMap.set(eTag[1], new Set());
-          }
-          commentMap.get(eTag[1])!.add(c.pubkey);
-        }
+  // Count unique comments per bookmark (deduplicate by pubkey)
+  const commentCounts = new Map<string, Set<string>>();
+  for (const c of allComments) {
+    const eTags = c.tags.filter(t => t[0] === 'e');
+    for (const eTag of eTags) {
+      if (eTag[1] && scores.has(eTag[1])) {
+        if (!commentCounts.has(eTag[1])) commentCounts.set(eTag[1], new Set());
+        commentCounts.get(eTag[1])!.add(c.pubkey);
       }
     }
+  }
 
-    // Compute scores
-    for (const [bookmarkId, entry] of scores) {
-      const reactionCount = reactionMap.get(bookmarkId)?.size ?? 0;
-      const commentCount = commentMap.get(bookmarkId)?.size ?? 0;
-      entry.reactionCount = reactionCount;
-      entry.commentCount = commentCount;
-      entry.score = reactionCount * 1 + commentCount * 1.5;
-    }
-  } catch {
-    // If engagement query fails, scores stay at 0
+  // Compute final scores
+  for (const [bookmarkId, entry] of scores) {
+    const rx = reactionCounts.get(bookmarkId)?.size ?? 0;
+    const cm = commentCounts.get(bookmarkId)?.size ?? 0;
+    entry.reactionCount = rx;
+    entry.commentCount = cm;
+    entry.score = rx * 1 + cm * 1.5;
   }
 
   return scores;
@@ -155,14 +156,12 @@ function AuthorAvatar({ pubkey, className = '' }: { pubkey: string; className?: 
 function AuthorName({ pubkey }: { pubkey: string }) {
   const author = useAuthor(pubkey);
   const metadata: NostrMetadata | undefined = author.data?.metadata;
-
   const displayName = metadata?.display_name || metadata?.name || genUserName(pubkey);
-
   return <span>{displayName}</span>;
 }
 
 /** Compact HN-style inline like button */
-function InlineLikeButton({ event, bookmarkId }: { event: NostrEvent; bookmarkId: string }) {
+function InlineLikeButton({ event }: { event: NostrEvent }) {
   const { user } = useCurrentUser();
   const { likes, hasUserLiked, userReaction } = useReactionStats(event, user?.pubkey);
   const { mutate: publishReaction, isPending: isPublishing } = useReactionPublish();
@@ -222,10 +221,11 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
   const [showFollowsOnly, setShowFollowsOnly] = useState(false);
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
   const [sortMode, setSortMode] = useState<SortMode>('new');
-  const [loadingScores, setLoadingScores] = useState(false);
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
-  // Time window in seconds for Hot (24 hours) and Top (3 days)
-  const timeWindowSeconds = sortMode === 'hot' ? 24 * 60 * 60 : sortMode === 'top' ? 3 * 24 * 60 * 60 : undefined;
+  // Engagement scores
+  const [engagementScores, setEngagementScores] = useState<Map<string, EngagementScore>>(new Map());
+  const [scoresLoading, setScoresLoading] = useState(false);
 
   useEffect(() => {
     setSearchInput(initialSearchTerm);
@@ -236,9 +236,15 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
     const timeoutId = setTimeout(() => {
       setSearchTerm(searchInput);
     }, 300);
-
     return () => clearTimeout(timeoutId);
   }, [searchInput]);
+
+  // Reset sort to 'new' when tag filter changes
+  useEffect(() => {
+    if (selectedTag) {
+      setSortMode('new');
+    }
+  }, [selectedTag]);
 
   const { data: follows = [] } = useFollows(user?.pubkey);
   const authors = showFollowsOnly && follows.length > 0 ? follows : undefined;
@@ -247,7 +253,7 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
   const infiniteQuery = useInfiniteBookmarks({
     pubkey,
     authors,
-    pageSize: 20
+    pageSize: 60,
   });
 
   const searchQuery = useBookmarkSearch({
@@ -270,67 +276,82 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
     ? (searchQuery.data || [])
     : (data?.pages.flatMap(page => page.bookmarks) || []);
 
-  useEffect(() => {
-    // Clear search when following filter changes
-  }, [showFollowsOnly]);
+  // Time window
+  const timeWindowSeconds = sortMode === 'hot' ? 24 * 60 * 60 : sortMode === 'top' ? 3 * 24 * 60 * 60 : undefined;
 
-  // Compute engagement scores for hot/top modes
-  const [engagementScores, setEngagementScores] = useState<Map<string, EngagementScore>>(new Map());
-
+  // Fetch engagement scores when switching to hot/top
+  const fetchCounter = useRef(0);
   useEffect(() => {
-    if (sortMode === 'new' || allBookmarks.length === 0) {
-      setEngagementScores(new Map());
+    const isEngagementMode = sortMode === 'hot' || sortMode === 'top';
+    
+    if (!isEngagementMode) {
+      setScoresLoading(false);
       return;
     }
 
-    let cancelled = false;
-    setLoadingScores(true);
+    if (allBookmarks.length === 0) return;
 
-    computeEngagementScores(allBookmarks, nostr, timeWindowSeconds)
-      .then((scores) => {
-        if (!cancelled) {
-          setEngagementScores(scores);
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) {
-          setLoadingScores(false);
-        }
-      });
+    // Increment fetch counter; cancel previous in-flight requests
+    fetchCounter.current++;
+    const currentFetch = fetchCounter.current;
+
+    setScoresLoading(true);
+
+    fetchEngagementScores(
+      nostr,
+      allBookmarks.map(b => b.id),
+      timeWindowSeconds,
+    ).then((scores) => {
+      if (fetchCounter.current === currentFetch) {
+        setEngagementScores(scores);
+        setScoresLoading(false);
+      }
+    }).catch(() => {
+      if (fetchCounter.current === currentFetch) {
+        setScoresLoading(false);
+      }
+    });
 
     return () => {
-      cancelled = true;
+      // This does NOT cancel — we rely on the counter check in .then
     };
-  }, [sortMode, allBookmarks, nostr, timeWindowSeconds]);
+  }, [sortMode, nostr, timeWindowSeconds, allBookmarks]);
 
-  let filteredBookmarks = allBookmarks;
+  // Build the display list
+  let displayBookmarks: Array<Bookmark & { _score?: number }> = allBookmarks;
 
-  // Apply time-based filtering and sorting
-  if (sortMode === 'hot') {
-    // Hot: created within 24 hours, sorted by engagement (score desc, then recency)
-    const cutoff = Math.floor(Date.now() / 1000) - 24 * 60 * 60;
-    filteredBookmarks = allBookmarks.filter(b => b.createdAt >= cutoff);
-    filteredBookmarks = [...filteredBookmarks].sort((a, b) => {
-      const scoreA = engagementScores.get(a.id)?.score ?? 0;
-      const scoreB = engagementScores.get(b.id)?.score ?? 0;
-      if (scoreB !== scoreA) return scoreB - scoreA;
-      return b.createdAt - a.createdAt; // tiebreaker: newest first
-    });
-  } else if (sortMode === 'top') {
-    // Top: created within 3 days, sorted by engagement (score desc, then recency)
-    const cutoff = Math.floor(Date.now() / 1000) - 3 * 24 * 60 * 60;
-    filteredBookmarks = allBookmarks.filter(b => b.createdAt >= cutoff);
-    filteredBookmarks = [...filteredBookmarks].sort((a, b) => {
+  // Apply tag filter
+  if (selectedTag) {
+    displayBookmarks = displayBookmarks.filter(b => b.tags.includes(selectedTag));
+  }
+
+  // Apply time window for hot/top
+  if (timeWindowSeconds) {
+    const cutoff = Math.floor(Date.now() / 1000) - timeWindowSeconds;
+    displayBookmarks = displayBookmarks.filter(b => b.createdAt >= cutoff);
+  }
+
+  // Sort
+  if (sortMode === 'hot' || sortMode === 'top') {
+    // Sort by engagement score, then by recency as tiebreaker
+    displayBookmarks = [...displayBookmarks].sort((a, b) => {
       const scoreA = engagementScores.get(a.id)?.score ?? 0;
       const scoreB = engagementScores.get(b.id)?.score ?? 0;
       if (scoreB !== scoreA) return scoreB - scoreA;
       return b.createdAt - a.createdAt;
     });
-  } else if (!isSearching) {
-    // New: reverse chronological (as received from Nostr)
-    filteredBookmarks = [...allBookmarks].sort((a, b) => b.createdAt - a.createdAt);
+  } else {
+    // Default: newest first
+    displayBookmarks = [...displayBookmarks].sort((a, b) => b.createdAt - a.createdAt);
   }
+
+  // Attach score data for render
+  const scoredBookmarks: BookmarkedWithScore[] = displayBookmarks.map(b => ({
+    ...b,
+    _score: engagementScores.get(b.id)?.score ?? 0,
+    _reactionCount: engagementScores.get(b.id)?.reactionCount ?? 0,
+    _commentCount: engagementScores.get(b.id)?.commentCount ?? 0,
+  }));
 
   const handleScroll = useCallback(() => {
     if (
@@ -351,100 +372,67 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
 
   const handleDelete = (bookmark: Bookmark) => {
     deleteBookmark(bookmark.id, {
-      onSuccess: () => {
-        toast.success('Bookmark deleted');
-      },
-      onError: () => {
-        toast.error('Failed to delete bookmark');
-      },
+      onSuccess: () => toast.success('Bookmark deleted'),
+      onError: () => toast.error('Failed to delete bookmark'),
     });
   };
 
-  const canDelete = (bookmark: Bookmark) => {
-    return user && user.pubkey === bookmark.pubkey;
-  };
+  const canDelete = (bookmark: Bookmark) => user && user.pubkey === bookmark.pubkey;
 
   const toggleComments = (bookmarkId: string) => {
     setExpandedComments(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(bookmarkId)) {
-        newSet.delete(bookmarkId);
-      } else {
-        newSet.add(bookmarkId);
-      }
+      if (newSet.has(bookmarkId)) newSet.delete(bookmarkId);
+      else newSet.add(bookmarkId);
       return newSet;
     });
   };
 
-  const hasBookmarkDescription = (bookmark: Bookmark) => {
-    return bookmark.description && bookmark.description.trim().length > 0;
-  };
+  const hasBookmarkDescription = (bookmark: Bookmark) => bookmark.description && bookmark.description.trim().length > 0;
 
   return (
     <div>
-      {/* Sort tabs - HN style: New | Hot | Top */}
+      {/* Sort tabs - HN style: new | hot | top */}
       {!pubkey && !isSearching && (
         <div className="flex items-center gap-3 mb-3 text-xs">
-          <button
-            onClick={() => setSortMode('new')}
-            className={cn(
-              "flex items-center gap-1 pb-1 border-b-2 transition-colors",
-              sortMode === 'new'
-                ? "border-primary text-foreground font-medium"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <ArrowUp className="h-3 w-3" />
-            New
-          </button>
-          <button
-            onClick={() => setSortMode('hot')}
-            className={cn(
-              "flex items-center gap-1 pb-1 border-b-2 transition-colors",
-              sortMode === 'hot'
-                ? "border-primary text-foreground font-medium"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <TrendingUp className="h-3 w-3" />
-            Hot
-          </button>
-          <button
-            onClick={() => setSortMode('top')}
-            className={cn(
-              "flex items-center gap-1 pb-1 border-b-2 transition-colors",
-              sortMode === 'top'
-                ? "border-primary text-foreground font-medium"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Star className="h-3 w-3" />
-            Top
-          </button>
-          {(sortMode === 'hot' || sortMode === 'top') && loadingScores && (
+          <span className="text-muted-foreground/60">view:</span>
+          {[
+            { mode: 'new' as SortMode, label: 'new', icon: ArrowUp },
+            { mode: 'hot' as SortMode, label: 'hot', icon: TrendingUp },
+            { mode: 'top' as SortMode, label: 'top', icon: Star },
+          ].map(({ mode, label, icon: Icon }) => (
+            <button
+              key={mode}
+              onClick={() => setSortMode(mode)}
+              className={cn(
+                "flex items-center gap-1 pb-1 border-b-2 transition-colors uppercase",
+                sortMode === mode
+                  ? "border-primary text-foreground font-medium"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Icon className="h-3 w-3" />
+              {label}
+            </button>
+          ))}
+          {(sortMode === 'hot' || sortMode === 'top') && scoresLoading && (
             <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
           )}
         </div>
       )}
 
-      {/* Follows filter - only on public/home view */}
+      {/* Follows filter */}
       {!pubkey && user && follows.length > 0 && (
         <div className="text-xs text-muted-foreground mb-2 flex items-center gap-2">
           {showFollowsOnly ? (
             <>
               {follows.length} connection{follows.length !== 1 ? 's' : ''}
-              <button
-                onClick={() => setShowFollowsOnly(false)}
-                className="text-primary hover:underline"
-              >
+              <button onClick={() => setShowFollowsOnly(false)} className="text-primary hover:underline">
                 switch to global
               </button>
             </>
           ) : (
-            <button
-              onClick={() => setShowFollowsOnly(true)}
-              className="text-primary hover:underline"
-            >
+            <button onClick={() => setShowFollowsOnly(true)} className="text-primary hover:underline">
               show from connections only
             </button>
           )}
@@ -454,13 +442,13 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
       {/* Results count */}
       {!isLoading && (
         <div className="text-xs text-muted-foreground mb-2">
-          {filteredBookmarks.length} bookmark{filteredBookmarks.length !== 1 ? 's' : ''}
+          {scoredBookmarks.length} bookmark{scoredBookmarks.length !== 1 ? 's' : ''}
+          {selectedTag && ` tagged "${selectedTag}"`}
           {isSearching && searchTerm && ` matching "${searchTerm}"`}
         </div>
       )}
 
       <div className="border-t">
-        {/* Loading state */}
         {isLoading && (
           <div className="flex items-center justify-center py-8">
             <div className="flex items-center gap-2 text-muted-foreground text-xs">
@@ -470,30 +458,27 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
           </div>
         )}
 
-        {/* Error state */}
         {error && !isLoading && (
           <div className="text-center py-8 text-destructive text-xs">
             Failed to load bookmarks. Please try again.
           </div>
         )}
 
-        {/* No results */}
-        {filteredBookmarks.length === 0 && !isLoading && !error && (
+        {scoredBookmarks.length === 0 && !isLoading && !error && (
           <div className="text-center py-8 text-muted-foreground text-xs">
-            {isSearching ? (
-              `No bookmarks found for "${searchInput}"`
-            ) : pubkey ? (
-              'No bookmarks yet'
-            ) : (
-              'No bookmarks found'
-            )}
+            {isSearching
+              ? `No bookmarks found for "${searchInput}"`
+              : pubkey
+                ? 'No bookmarks yet'
+                : selectedTag
+                  ? `No bookmarks with tag "#${selectedTag}"`
+                  : 'No bookmarks found'}
           </div>
         )}
 
-        {/* Bookmark list - HN style with avatars */}
-        {!isLoading && !error && filteredBookmarks.length > 0 && (
+        {scoredBookmarks.length > 0 && !isLoading && !error && (
           <div className="space-y-0">
-            {filteredBookmarks.map((bookmark, index) => (
+            {scoredBookmarks.map((bookmark, index) => (
               <div key={bookmark.id} className="border-b border-border/30 hover:bg-muted/30 transition-colors group">
                 <div className="flex items-start gap-2 py-3 px-1">
                   {/* Number */}
@@ -502,19 +487,13 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
                   </span>
 
                   {/* Avatar */}
-                  <Link
-                    to={`/profile/${nip19.npubEncode(bookmark.pubkey)}`}
-                    className="mt-0.5 shrink-0"
-                  >
-                    <AuthorAvatar
-                      pubkey={bookmark.pubkey}
-                      className="w-5 h-5 bg-muted text-muted-foreground"
-                    />
+                  <Link to={`/profile/${nip19.npubEncode(bookmark.pubkey)}`} className="mt-0.5 shrink-0">
+                    <AuthorAvatar pubkey={bookmark.pubkey} className="w-5 h-5 bg-muted text-muted-foreground" />
                   </Link>
 
                   {/* Content */}
                   <div className="flex-1 min-w-0">
-                    {/* Title link */}
+                    {/* Title */}
                     <div className="flex items-start gap-1.5 flex-wrap">
                       <a
                         href={bookmark.url}
@@ -536,34 +515,25 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
 
                     {/* Metadata row */}
                     <div className="flex items-center gap-1.5 flex-wrap mt-1 text-[11px] text-muted-foreground">
-                      <Link
-                        to={`/profile/${nip19.npubEncode(bookmark.pubkey)}`}
-                        className="text-primary hover:underline"
-                      >
+                      <Link to={`/profile/${nip19.npubEncode(bookmark.pubkey)}`} className="text-primary hover:underline">
                         <AuthorName pubkey={bookmark.pubkey} />
                       </Link>
                       <span>{formatDistanceToNow(new Date(bookmark.createdAt * 1000), { addSuffix: true })}</span>
-                      {bookmark.tags.length > 0 && (
+
+                      {/* Show score for hot/top modes */}
+                      {(sortMode === 'hot' || sortMode === 'top') && bookmark._score > 0 && (
                         <>
-                          <span>|</span>
-                          <div className="flex flex-wrap gap-x-1.5 gap-y-0.5">
-                            {bookmark.tags.map((tag) => (
-                              <span key={tag} className="text-muted-foreground/80">
-                                #{tag}
-                              </span>
-                            ))}
-                          </div>
+                          <span className="text-primary font-medium">{bookmark._score}</span>
                         </>
                       )}
+
                       {hasBookmarkDescription(bookmark) && (
                         <>
                           <span>|</span>
                           <button
                             onClick={() => {
                               const el = document.getElementById(`desc-${bookmark.id}`);
-                              if (el) {
-                                el.classList.toggle('hidden');
-                              }
+                              if (el) el.classList.toggle('hidden');
                             }}
                             className="text-primary hover:underline"
                           >
@@ -571,8 +541,38 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
                           </button>
                         </>
                       )}
+
+                      {bookmark.tags.length > 0 && (
+                        <>
+                          <span>|</span>
+                          {selectedTag && (
+                            <button
+                              onClick={() => setSelectedTag(null)}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-medium hover:bg-primary/20 transition-colors"
+                            >
+                              #{selectedTag}
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                            </button>
+                          )}
+                          <div className="flex flex-wrap gap-x-1.5 gap-y-0.5">
+                            {bookmark.tags.map((tag) => (
+                              <button
+                                key={tag}
+                                onClick={() => setSelectedTag(tag === selectedTag ? null : tag)}
+                                className={cn(
+                                  "text-[11px] hover:text-primary transition-colors",
+                                  tag === selectedTag ? "text-primary font-medium" : "text-muted-foreground/80"
+                                )}
+                              >
+                                #{tag}
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+
                       <span>|</span>
-                      <InlineLikeButton event={bookmark.event} bookmarkId={bookmark.id} />
+                      <InlineLikeButton event={bookmark.event} />
                       <span>|</span>
                       <button
                         onClick={() => toggleComments(bookmark.id)}
@@ -583,7 +583,6 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
                       </button>
                     </div>
 
-                    {/* Collapsible description */}
                     {hasBookmarkDescription(bookmark) && (
                       <div
                         id={`desc-${bookmark.id}`}
@@ -594,7 +593,7 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
                     )}
                   </div>
 
-                  {/* Delete button (owner only) */}
+                  {/* Delete button */}
                   {canDelete(bookmark) && (
                     <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                       <AlertDialog>
@@ -606,16 +605,11 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
                         <AlertDialogContent>
                           <AlertDialogHeader>
                             <AlertDialogTitle>Delete Bookmark</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to delete this bookmark? This action cannot be undone.
-                            </AlertDialogDescription>
+                            <AlertDialogDescription>Are you sure? This cannot be undone.</AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDelete(bookmark)}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            >
+                            <AlertDialogAction onClick={() => handleDelete(bookmark)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                               Delete
                             </AlertDialogAction>
                           </AlertDialogFooter>
@@ -628,10 +622,7 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
                 {/* Comments section */}
                 {expandedComments.has(bookmark.id) && (
                   <div className="px-1 pb-3 pl-[78px]">
-                    <CommentsSection
-                      event={bookmark.event}
-                      className="mt-2"
-                    />
+                    <CommentsSection event={bookmark.event} className="mt-2" />
                   </div>
                 )}
               </div>
@@ -639,14 +630,14 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
           </div>
         )}
 
-        {/* Load more indicator */}
+        {/* Load more */}
         {!isSearching && isFetchingNextPage && (
           <div className="flex items-center justify-center py-4">
             <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
           </div>
         )}
 
-        {/* End of results */}
+        {/* End */}
         {!isSearching && !hasNextPage && allBookmarks.length > 0 && (
           <div className="text-center py-4 text-xs text-muted-foreground">
             End of bookmarks
