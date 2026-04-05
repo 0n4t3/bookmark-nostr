@@ -505,14 +505,15 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
                   </Link>
 
                   {/* Content */}
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 w-0">
                     {/* Title */}
                     <div className="flex items-start gap-1.5 flex-wrap">
                       <a
                         href={bookmark.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-sm font-medium text-foreground hover:text-primary hover:underline leading-snug break-words overflow-wrap-anywhere max-w-full"
+                        className="text-sm font-medium text-foreground hover:text-primary hover:underline leading-snug break-all min-w-0"
+                        style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                       >
                         {bookmark.title || new URL(bookmark.url).hostname}
                       </a>
@@ -520,14 +521,15 @@ export function InfiniteBookmarkList({ pubkey, showUserFilter = false, initialSe
                         href={bookmark.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[10px] text-muted-foreground hover:text-primary hover:underline shrink-0 mt-0.5"
+                        className="text-[10px] text-muted-foreground hover:text-primary hover:underline mt-0.5 break-all min-w-0"
+                        style={{ wordBreak: 'break-all', overflowWrap: 'anywhere' }}
                       >
                         ({new URL(bookmark.url).hostname})
                       </a>
                     </div>
 
                     {/* Metadata row */}
-                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-1 text-[11px] text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-1 text-[11px] text-muted-foreground" style={{ wordBreak: 'break-word' }}>
                       <Link to={`/profile/${nip19.npubEncode(bookmark.pubkey)}`} className="text-primary hover:underline">
                         <AuthorName pubkey={bookmark.pubkey} />
                       </Link>

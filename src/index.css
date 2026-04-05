@@ -116,6 +116,15 @@ img, video, svg, canvas, iframe {
   max-width: 100%;
 }
 
+/* Force all text in bookmark lists to wrap - no exceptions */
+.border-b.border-border\/30 *,
+.space-y-0 * {
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: break-word;
+  min-width: 0;
+}
+
 /* HN-style bookmark items: constrain description on mobile */
 @media (max-width: 640px) {
   .max-w-\[600px\] {
