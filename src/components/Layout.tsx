@@ -328,7 +328,7 @@ export function Layout({ children }: LayoutProps) {
               </a>
               <span className="text-muted-foreground/40">·</span>
               <a
-                 href="https://github.com/sepehr-safari/vibemarks"
+                href="https://github.com/0n4t3/bookmark-nostr/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-primary"
