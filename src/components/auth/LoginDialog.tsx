@@ -95,7 +95,7 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, onS
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className='sm:max-w-md p-0 overflow-hidden rounded-2xl'>
         <DialogHeader className='px-6 pt-6 pb-0 relative'>
           <DialogTitle className='text-xl font-semibold text-center'>Log in</DialogTitle>
